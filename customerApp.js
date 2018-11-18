@@ -11,8 +11,8 @@ const connection = mysql.createConnection({
 });
 
 //load the Bamazon
-function loadBamazon() {
-    connection.connect(function (err) {
+const loadBamazon = () => {
+    connection.connect( (err) => {
         if (err) {
             throw err;
         }
@@ -24,31 +24,28 @@ function loadBamazon() {
 } //end loadBamazon()
 
 //Display the main table of products
-function displayTable() {
-    connection.query("SELECT * FROM products", function (err, result) {
+const displayTable = () => {
+    connection.query("SELECT item_id, product_name, price, product_stock FROM products", (err, result) => {
         if (err) {
             throw err;
         }
 
-        let newTable = [];
+        let idArray = []
 
         result.forEach(function (index) {
-            // console.log(index);
-            let newObject = {
-                id: index.item_id,
-                product: index.product_name,
-                price: "$ " + index.price
-            }
-            newTable.push(newObject);
+            idArray.push(index.item_id);
         })
-        console.log("\n");
-        console.table(newTable);
 
-        purchaseItem();
+        console.log("\n");
+        console.table(result);
+
+        inputValidation(idArray);
+        // connection.end();
     }); //end connection.query()
 }
 
-function purchaseItem() {
+//Initial input and data validation
+const inputValidation = (array) => {
 
     inquirer.prompt([
         {
@@ -56,40 +53,94 @@ function purchaseItem() {
             message: "What would you like to purchase? (enter ID from above table)",
             name: "whichProduct",
         },
-        // Here we create a basic password-protected text prompt.
         {
             type: "input",
             message: "How many would you like?",
             name: "quantity"
         }
     ])
-        .then(function (response) {
-            let cChoices = [];
-            let cAnswers = response;
-            connection.query("SELECT * FROM products", function (err, result) {
-                if (err) {
-                    throw err;
-                }
-
-                result.forEach(function (index) {
-                    cChoices.push(index.item_id);
-                });
-                //checking for invalid entries
-                console.log(parseInt(cAnswers.whichProduct));
-                
-                if (!parseInt(cAnswers.whichProduct)) {
-                    console.log("\nPlease enter an ID from the following Table");
-                    displayTable();
-                } else if (cChoices.indexOf(cAnswers.whichProduct) < 0) {
-                    console.log("\nPlease enter an ID from the following Table");
-                    displayTable();
-                } else { //finally getting to the maths
-                    console.log("Whoo we did it");
-                }
-
-            }); //end connect.q
-
+        .then((inqRes) => {
+            if (!array.includes(parseInt(inqRes.whichProduct))) {
+                console.log("Play nice: enter a valid product ID.");
+                displayTable();
+            } else if (!parseInt(inqRes.quantity)) {
+                console.log("Play nice: enter a valid quantity.");
+                displayTable();
+            } else {
+                inventoryManagement(inqRes);
+            }
         }); //end inq.prompt
-} //end purchaseItem()
+} //end inputValidation()
+
+//Misnomer.  Really handling inventory workflow. So maybe not that much of a misnomer.
+const inventoryManagement = (inqRes) => {
+    const quantity = parseInt(inqRes.quantity);
+
+    connection.query(`SELECT * FROM products WHERE item_id = ${inqRes.whichProduct}`,
+        (err, result) => {
+
+            console.log(`\nYou want ${quantity} ${result[0].product_name}`);
+
+            const productInventory = parseInt(result[0].product_stock);
+            if (err) {
+                throw err;
+            }
+
+            if (quantity > productInventory) {
+                console.log(`You entered too many of those.  We have ${productInventory} left.`);
+
+                inquirer.prompt([
+                    {
+                        type: "confirm",
+                        message: "Would you like to purchase them all?",
+                        name: "answer",
+                    }
+                ]).then(function (confirm) {
+                    console.log(confirm.answer);
+                    if (confirm.answer == true) {
+                        console.log("The remainder is yours.");
+                        updateInventory(inqRes.whichProduct, productInventory, productInventory);
+                    } else {
+                        displayTable();
+                    }
+                }); //end Inquirer
+
+            } else {
+                console.log(`\nThat will be $${quantity * result[0].price}. \n`);
+
+                updateInventory(inqRes.whichProduct, productInventory, quantity);
+            }
+            // console.log(result);
+        }); //end connect.q
+} //end inventoryManagement()
+
+//Handle the actual inventory update.
+const updateInventory = (productId, inventory, quantity) => {
+    const updateQuant = inventory - quantity;
+
+    connection.query(`UPDATE products SET ? WHERE ?`,
+        [ {product_stock: updateQuant}, {item_id: productId} ],
+        (err, result) => {
+            if (err) {
+                throw err;
+            }
+
+            inquirer.prompt([
+                {
+                    type: "confirm",
+                    message: "Would you like to keep shopping?",
+                    name: "answer",
+                }
+            ]).then(function (confirm) {
+                if (confirm.answer == true) {
+                    displayTable();
+                } else {
+                    console.log("\nThanks for shopping with Bamazon.  Please come again soon.")
+                    connection.end();
+                }
+            }); //end Inquirer
+
+        }); //end connect.q
+}
 
 loadBamazon();
