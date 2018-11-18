@@ -25,7 +25,7 @@ const loadBamazon = () => {
 
 //Display the main table of products
 const displayTable = () => {
-    connection.query("SELECT item_id, product_name, price, product_stock FROM products", (err, result) => {
+    connection.query("SELECT item_id, product_name, price FROM products", (err, result) => {
         if (err) {
             throw err;
         }
