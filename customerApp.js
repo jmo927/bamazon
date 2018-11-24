@@ -144,3 +144,4 @@ const updateInventory = (productId, inventory, quantity) => {
 }
 
 loadBamazon();
+
